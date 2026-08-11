@@ -3,18 +3,38 @@ import { useRouter } from 'expo-router';
 import { Church } from 'lucide-react-native';
 import { useState } from 'react';
 import {
+  Alert,
   SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 
 export default function LoginScreen() {
 const [correo, setCorreo] = useState('');
 const [contrasena, setContrasena] = useState('');
 const router = useRouter();
+
+const validarParametros = () => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  if (!correo?.trim() || !contrasena?.trim()) {
+    Alert.alert('ERROR', 'Los campos son obligatorios');
+    return;
+  }
+
+  if (!emailRegex.test(correo.trim())) {
+    Alert.alert('Error', 'Correo electrónico no válido');
+    return;
+  }
+
+  handleLogin();
+};
+const handleLogin = () =>{
+  router.push('/MainMenuScreen')
+}
 
 return ( <SafeAreaView style={styles.container}>
  <View style={styles.logoCard}> <Church size={40} color='#7A1F1F' /> </View>
@@ -53,7 +73,7 @@ return ( <SafeAreaView style={styles.container}>
     </View>
   </View>
 
-  <TouchableOpacity style={styles.button} onPress={() => router.push('/MainMenuScreen')}>
+  <TouchableOpacity style={styles.button} onPress={validarParametros}>
     <Ionicons name='checkmark' size={20} color='white' />
     <Text style={styles.buttonText}>Ingresar</Text>
     
