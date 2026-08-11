@@ -1,7 +1,7 @@
-import MainMenuScreen from "./MainMenuScreen";
+import LoginScreen from "./LoginScreen";
 
 export default function Index() {
   return (
-   <MainMenuScreen />
+   <LoginScreen />
   );
 }
