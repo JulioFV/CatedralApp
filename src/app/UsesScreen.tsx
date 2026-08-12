@@ -116,6 +116,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 16,
+    marginTop:30,
   },
 
   headerButton: {

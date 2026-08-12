@@ -44,8 +44,7 @@ export default function LocationsScreen() {
   };
 
   const handleAdd = () => {
-    console.log('Nueva ubicación');
-    // navigation.navigate('CreateLocation');
+    router.push('/CreateLocation');
   };
 
   const handleOpen = (id: string) => {
@@ -111,6 +110,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 16,
+    marginTop:30,
+
   },
 
   headerButton: {

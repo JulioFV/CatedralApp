@@ -51,8 +51,7 @@ export default function ItemsScreen() {
   };
 
   const handleAdd = () => {
-    console.log('Nuevo artículo');
-    // navigation.navigate('CreateItem');
+    router.push("/CreateItem");
   };
 
   const handleOpen = (ITEM: Item) => {
@@ -119,6 +118,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 16,
+    marginTop:30,
   },
 
   headerButton: {

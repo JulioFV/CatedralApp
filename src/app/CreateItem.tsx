@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { ArrowLeft, Check, ChevronDown } from 'lucide-react-native';
 import { useState } from 'react';
 import {
@@ -9,6 +10,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+
 
 const materials = [
     'Madera',
@@ -53,9 +55,11 @@ export default function CreateItem() {
     const [showLocations, setShowLocations] = useState(false);
 
     const [notes, setNotes] = useState('');
+    const router = useRouter();
+
 
     const handleBack = () => {
-        console.log('Regresar');
+        router.back();
     };
 
     const handleRegister = () => {
@@ -276,6 +280,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: 28,
+        marginTop:30,
+
     },
 
     headerButton: {

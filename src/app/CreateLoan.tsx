@@ -354,6 +354,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: 28,
+        marginTop:30,
     },
 
     headerButton: {

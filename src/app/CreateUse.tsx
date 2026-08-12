@@ -1,5 +1,7 @@
+import { useRouter } from 'expo-router';
 import { ArrowLeft, Check, ChevronDown } from 'lucide-react-native';
 import { useState } from 'react';
+
 import {
     SafeAreaView,
     ScrollView,
@@ -15,9 +17,10 @@ export default function CreateUse() {
     const [description, setDescription] = useState('');
     const [status, setStatus] = useState('ACTIVO');
     const [showStatusOptions, setShowStatusOptions] = useState(false);
+    const router = useRouter();
+
     const handleBack = () => {
-        console.log('Regresar');
-        // navigation.goBack();
+        router.back();
     };
 
     const handleRegister = () => {
@@ -144,6 +147,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: 28,
+        marginTop:30,
     },
 
     headerButton: {

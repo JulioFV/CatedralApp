@@ -11,30 +11,57 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { ApiError } from "../api/axiosClient";
+import { login } from "../api/services/authService";
+import { setSession } from "../session";
 
 export default function LoginScreen() {
-const [correo, setCorreo] = useState('');
-const [contrasena, setContrasena] = useState('');
+  const [email, setEmailInput] = useState<string>("f@gmail.com");
+  const [password, setPasswordInput] = useState<string>("1234");
+  const [loading, setLoading] = useState<boolean>(false);
 const router = useRouter();
 
 const validarParametros = () => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-  if (!correo?.trim() || !contrasena?.trim()) {
+  if (!email?.trim() || !password?.trim()) {
     Alert.alert('ERROR', 'Los campos son obligatorios');
     return;
   }
 
-  if (!emailRegex.test(correo.trim())) {
+  if (!emailRegex.test(email.trim())) {
     Alert.alert('Error', 'Correo electrónico no válido');
     return;
   }
 
   handleLogin();
 };
-const handleLogin = () =>{
-  router.push('/MainMenuScreen')
-}
+const handleLogin = async (): Promise<void> =>{
+
+  if (!email || !password) {
+      Alert.alert("Atención", "Por favor ingresa email y contraseña");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const result = await login(email, password);
+
+      if (result.success) {
+        setSession(result.data);
+        console.log("Respuesta del servidor");
+        router.push('/MainMenuScreen');
+      } else {
+        Alert.alert("Error", result.message || "Credenciales incorrectas");
+      }
+    } catch (error) {
+      const apiError = error as ApiError;
+      Alert.alert("Error de conexión", apiError.mensaje || "Intenta de nuevo");
+    } finally {
+      setLoading(false);
+    }
+  };
 
 return ( <SafeAreaView style={styles.container}>
  <View style={styles.logoCard}> <Church size={40} color='#7A1F1F' /> </View>
@@ -48,8 +75,8 @@ return ( <SafeAreaView style={styles.container}>
       <Church size={20} color='#777' style={styles.icon} />
       <TextInput
         style={styles.input}
-        value={correo}
-        onChangeText={setCorreo}
+        value={email}
+        onChangeText={setEmailInput}
         placeholder='admin@catedral.com'
         placeholderTextColor='#999'
         keyboardType='email-address'
@@ -64,8 +91,8 @@ return ( <SafeAreaView style={styles.container}>
       <Church size={20} color='#777' style={styles.icon} />
       <TextInput
         style={styles.input}
-        value={contrasena}
-        onChangeText={setContrasena}
+        value={password}
+        onChangeText={setPasswordInput}
         placeholder='Contraseña'
         placeholderTextColor='#999'
         secureTextEntry
