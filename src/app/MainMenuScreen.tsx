@@ -1,11 +1,11 @@
 import { useRouter } from 'expo-router';
 import { Archive, Calendar, LogOut, MapPin, Package, Users } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { ApiError } from '../api/axiosClient';
 import { getGeneralStats } from '../api/services/generalService';
 import MenuCard from '../components/MenuCard';
-import { getNombre } from '../session';
+import { getIdRol, getNombre } from '../session';
 import { GeneralStats } from '../types/general';
 
 const sections = [
@@ -16,6 +16,7 @@ const sections = [
         desc: 'Gestión de objetos',
         color: '#6B1F1F',
         screen: '/ItemsScreen',
+        roles: null,
     },
     {
         id: 'Locations',
@@ -24,6 +25,7 @@ const sections = [
         desc: 'Gestión de espacios',
         color: '#C9A44C',
         screen: '/LocationsScreen',
+        roles: null,
     },
     {
         id: 'Loans',
@@ -32,6 +34,7 @@ const sections = [
         desc: 'Salidas y retornos',
         color: '#4A5D3A',
         screen: '/LoansScreen',
+        roles: null,
     },
     {
         id: 'Users',
@@ -40,6 +43,7 @@ const sections = [
         desc: 'Administración',
         color: '#5A5A5A',
         screen: '/UsersScreen',
+        roles: [1],
     },
     {
         id: 'Uses',
@@ -48,6 +52,7 @@ const sections = [
         desc: 'Categorias de uso',
         color: '#6B1F1F',
         screen: '/UsesScreen',
+        roles: null,
     },
     {
         id:'Login',
@@ -55,7 +60,8 @@ const sections = [
         icon: LogOut,
         desc:'Cerrar sesion',
         color:'#780606',
-        screen: '/LoginScreen'
+        screen: '/LoginScreen',
+        roles: null,
     },
 ] as const;
 
@@ -63,6 +69,7 @@ export default function MainMenuScreen() {
     const router = useRouter();
     const [stats, setStats] = useState<GeneralStats | null>(null);
     const [loadingStats, setLoadingStats] = useState<boolean>(true);
+    const idRol = getIdRol();
 
     useEffect(() => {
         const loadStats = async (): Promise<void> => {
@@ -81,6 +88,13 @@ export default function MainMenuScreen() {
 
         loadStats();
     }, []);
+
+    const visibleSections = useMemo ( () => {
+        return sections.filter((section) =>{
+            if(section.roles === null) return true;
+            return section.roles.includes(idRol as never);
+        });
+    }, [idRol]);
 
     return (
         <SafeAreaView style={styles.container}>
@@ -113,7 +127,7 @@ export default function MainMenuScreen() {
                 </View>
             </View>
             <FlatList
-                data={sections}
+                data={visibleSections}
                 numColumns={2}
                 keyExtractor={(item) => item.id}
                 columnWrapperStyle={styles.row}
@@ -152,6 +166,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#7A1F1F',
         marginBottom: 6,
+        marginTop:15,
     },
     subtitle: {
         fontSize: 16,

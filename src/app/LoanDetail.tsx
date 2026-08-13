@@ -211,6 +211,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: 24,
+        marginTop:30,
     },
 
     headerButton: {
