@@ -1,8 +1,14 @@
-import { useRouter } from 'expo-router';
-import { ArrowLeft, Check, ChevronDown } from 'lucide-react-native';
-import { useState } from 'react';
-
+import { ApiError } from '@/api/axiosClient';
+import { createUso, updateUso, UsoPayload } from '@/api/services/usoService';
+import { Uso } from '@/models/Uso';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { ArrowLeft, Check } from 'lucide-react-native';
+import { useEffect, useMemo, useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
     SafeAreaView,
     ScrollView,
     StyleSheet,
@@ -12,169 +18,203 @@ import {
     View,
 } from 'react-native';
 
-export default function CreateUse() {
-    const [name, setName] = useState('');
-    const [description, setDescription] = useState('');
-    const [status, setStatus] = useState('ACTIVO');
-    const [showStatusOptions, setShowStatusOptions] = useState(false);
-    const router = useRouter();
+const ESTADO_ACTIVO = 1;
+const ESTADO_INACTIVO = 2; // Confirmar con backend — ver nota en la respuesta
 
-    const handleBack = () => {
+export default function CreateUse() {
+    const router = useRouter();
+    const { id_uso, usoData } = useLocalSearchParams<{ id_uso?: string; usoData?: string }>();
+
+    const isEditMode = !!id_uso;
+
+    const parsedUso: Uso | null = useMemo(
+        () => (usoData ? JSON.parse(usoData) : null),
+        [usoData]
+    );
+
+    const [name, setName] = useState<string>('');
+    const [description, setDescription] = useState<string>('');
+    const [estado, setEstado] = useState<number>(ESTADO_ACTIVO);
+
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [submitting, setSubmitting] = useState<boolean>(false);
+
+    // Modo edición: prellenar el formulario con los datos recibidos
+    useEffect(() => {
+        if (!parsedUso) return;
+
+        setName(parsedUso.nombre);
+        setDescription(parsedUso.descripcion ?? '');
+        setEstado(parsedUso.estado);
+    }, [parsedUso]);
+
+    const handleBack = (): void => {
         router.back();
     };
 
-    const handleRegister = () => {
-        console.log({
-            name,
-            description,
-            status,
-        });
+    const validate = (): boolean => {
+        const newErrors: Record<string, string> = {};
+
+        if (!name.trim()) newErrors.name = 'El nombre es obligatorio';
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
     };
 
-    return (<SafeAreaView style={styles.container}> <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={true}
-    >
-        {/* Encabezado */} <View style={styles.header}> <TouchableOpacity
-            onPress={handleBack}
-            style={styles.headerButton}
-        > <ArrowLeft size={22} color='#555' /> </TouchableOpacity>
+    const handleRegister = async (): Promise<void> => {
+        if (!validate()) return;
 
-            <Text style={styles.title}>Nuevo Uso</Text>
+        const payload: UsoPayload = {
+            nombre: name.trim(),
+            descripcion: description.trim(),
+            estado,
+        };
 
-            {/* Espacio para centrar el título */}
-            <View style={styles.headerButton} />
-        </View>
+        try {
+            setSubmitting(true);
 
-        {/* Nombre del uso */}
-        <View style={styles.field}>
-            <Text style={styles.label}>NOMBRE DEL USO</Text>
+            const result =
+                isEditMode && parsedUso
+                    ? await updateUso(parsedUso.id_uso, payload)
+                    : await createUso(payload);
 
-            <TextInput
-                style={styles.input}
-                placeholder='Ej: Liturgia Dominical'
-                placeholderTextColor='#A1A1AA'
-                value={name}
-                onChangeText={setName}
-            />
-        </View>
+            if (!result.error) {
+                Alert.alert('Éxito', result.mensaje, [
+                    { text: 'Aceptar', onPress: () => router.back() },
+                ]);
+            } else {
+                Alert.alert('No se pudo guardar', result.mensaje);
+            }
+        } catch (error) {
+            const apiError = error as ApiError;
+            Alert.alert('Error', apiError.mensaje || 'Ocurrió un error al guardar el uso');
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
-        {/* Descripción */}
-        <View style={styles.field}>
-            <Text style={styles.label}>DESCRIPCIÓN</Text>
+    return (
+        <SafeAreaView style={styles.container}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={handleBack} style={styles.headerButton}>
+                            <ArrowLeft size={22} color="#555" />
+                        </TouchableOpacity>
 
-            <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder='Describe brevemente en qué consiste este uso...'
-                placeholderTextColor='#A1A1AA'
-                value={description}
-                onChangeText={setDescription}
-                multiline
-                numberOfLines={5}
-                textAlignVertical='top'
-            />
-        </View>
+                        <Text style={styles.title}>{isEditMode ? 'Editar Uso' : 'Nuevo Uso'}</Text>
 
-        {/* Estado */}
-        {/* Estado */}
-        <View style={styles.field}>
-            <Text style={styles.label}>ESTADO</Text>
+                        <View style={styles.headerButton} />
+                    </View>
 
-            <TouchableOpacity
-                style={styles.select}
-                onPress={() => setShowStatusOptions(!showStatusOptions)}
-                activeOpacity={0.8}
-            >
-                <Text style={styles.selectText}>{status}</Text>
-                <ChevronDown size={20} color="#6B7280" />
-            </TouchableOpacity>
+                    {/* Nombre del uso */}
+                    <View style={styles.field}>
+                        <Text style={styles.label}>NOMBRE DEL USO</Text>
+                        <TextInput
+                            style={[styles.input, errors.name && styles.inputError]}
+                            placeholder="Ej: Liturgia Dominical"
+                            placeholderTextColor="#A1A1AA"
+                            value={name}
+                            onChangeText={setName}
+                        />
+                        {errors.name ? <Text style={styles.errorHint}>{errors.name}</Text> : null}
+                    </View>
 
-            {showStatusOptions && (
-                <View style={styles.dropdown}>
+                    {/* Descripción */}
+                    <View style={styles.field}>
+                        <Text style={styles.label}>DESCRIPCIÓN</Text>
+                        <TextInput
+                            style={[styles.input, styles.textArea]}
+                            placeholder="Describe brevemente en qué consiste este uso..."
+                            placeholderTextColor="#A1A1AA"
+                            value={description}
+                            onChangeText={setDescription}
+                            multiline
+                            numberOfLines={5}
+                            textAlignVertical="top"
+                        />
+                    </View>
+
+                    {/* Estado */}
+                    <View style={styles.field}>
+                        <Text style={styles.label}>ESTADO</Text>
+                        <View style={styles.segmentedControl}>
+                            <TouchableOpacity
+                                style={[
+                                    styles.segmentOption,
+                                    estado === ESTADO_ACTIVO && styles.segmentOptionActive,
+                                ]}
+                                onPress={() => setEstado(ESTADO_ACTIVO)}
+                                activeOpacity={0.8}
+                            >
+                                <Text
+                                    style={[
+                                        styles.segmentText,
+                                        estado === ESTADO_ACTIVO && styles.segmentTextActive,
+                                    ]}
+                                >
+                                    ACTIVO
+                                </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[
+                                    styles.segmentOption,
+                                    estado === ESTADO_INACTIVO && styles.segmentOptionInactive,
+                                ]}
+                                onPress={() => setEstado(ESTADO_INACTIVO)}
+                                activeOpacity={0.8}
+                            >
+                                <Text
+                                    style={[
+                                        styles.segmentText,
+                                        estado === ESTADO_INACTIVO && styles.segmentTextActive,
+                                    ]}
+                                >
+                                    INACTIVO
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* Botón */}
                     <TouchableOpacity
-                        style={styles.dropdownOption}
-                        onPress={() => {
-                            setStatus('ACTIVO');
-                            setShowStatusOptions(false);
-                        }}
+                        style={styles.button}
+                        activeOpacity={0.85}
+                        onPress={handleRegister}
+                        disabled={submitting}
                     >
-                        <Text style={styles.dropdownText}>ACTIVO</Text>
+                        {submitting ? (
+                            <ActivityIndicator size="small" color="white" />
+                        ) : (
+                            <>
+                                <Check size={20} color="white" />
+                                <Text style={styles.buttonText}>
+                                    {isEditMode ? 'Guardar Cambios' : 'Registrar Uso'}
+                                </Text>
+                            </>
+                        )}
                     </TouchableOpacity>
-
-                    <View style={styles.dropdownDivider} />
-
-                    <TouchableOpacity
-                        style={styles.dropdownOption}
-                        onPress={() => {
-                            setStatus('INACTIVO');
-                            setShowStatusOptions(false);
-                        }}
-                    >
-                        <Text style={styles.dropdownText}>INACTIVO</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-        </View>
-
-        {/* Botón */}
-        <TouchableOpacity
-            style={styles.button}
-            activeOpacity={0.85}
-            onPress={handleRegister}
-        >
-            <Check size={20} color='white' />
-            <Text style={styles.buttonText}>Registrar Uso</Text>
-        </TouchableOpacity>
-    </ScrollView>
-    </SafeAreaView>
-
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F5F4F0',
-    },
-
-    content: {
-        padding: 16,
-        paddingBottom: 40,
-    },
-
+    container: { flex: 1, backgroundColor: '#F5F4F0' },
+    content: { padding: 16, paddingBottom: 40 },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: 28,
-        marginTop:30,
+        marginTop: 30,
     },
-
-    headerButton: {
-        width: 36,
-        height: 36,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-
-    title: {
-        fontSize: 28,
-        fontWeight: '700',
-        color: '#7A1F1F',
-    },
-
-    field: {
-        marginBottom: 22,
-    },
-
-    label: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#4B5563',
-        letterSpacing: 0.6,
-        marginBottom: 8,
-    },
-
+    headerButton: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
+    title: { fontSize: 26, fontWeight: '700', color: '#7A1F1F' },
+    field: { marginBottom: 22 },
+    label: { fontSize: 12, fontWeight: '700', color: '#4B5563', letterSpacing: 0.6, marginBottom: 8 },
     input: {
         backgroundColor: '#F8F7F4',
         borderWidth: 1,
@@ -185,28 +225,27 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#1F2937',
     },
-
-    textArea: {
-        minHeight: 120,
-    },
-
-    select: {
+    inputError: { borderColor: '#B91C1C' },
+    errorHint: { fontSize: 12, color: '#B91C1C', marginTop: 6 },
+    textArea: { minHeight: 120 },
+    segmentedControl: {
+        flexDirection: 'row',
         backgroundColor: '#F8F7F4',
         borderWidth: 1,
         borderColor: '#D9D7D2',
         borderRadius: 16,
-        paddingHorizontal: 16,
-        height: 56,
-        flexDirection: 'row',
+        padding: 4,
+    },
+    segmentOption: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 12,
         alignItems: 'center',
-        justifyContent: 'space-between',
     },
-
-    selectText: {
-        fontSize: 16,
-        color: '#1F2937',
-    },
-
+    segmentOptionActive: { backgroundColor: '#3F6B34' },
+    segmentOptionInactive: { backgroundColor: '#8B1E1E' },
+    segmentText: { fontSize: 14, fontWeight: '700', color: '#6B7280' },
+    segmentTextActive: { color: 'white' },
     button: {
         marginTop: 20,
         height: 58,
@@ -215,42 +254,11 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-
         shadowColor: '#7A1F1F',
         shadowOffset: { width: 0, height: 5 },
         shadowOpacity: 0.22,
         shadowRadius: 8,
         elevation: 5,
-
     },
-
-    buttonText: {
-        color: 'white',
-        fontSize: 17,
-        fontWeight: '700',
-        marginLeft: 8,
-    },
-    dropdown: {
-        marginTop: 8,
-        backgroundColor: '#F8F7F4',
-        borderWidth: 1,
-        borderColor: '#D9D7D2',
-        borderRadius: 16,
-        overflow: 'hidden',
-    },
-
-    dropdownOption: {
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-    },
-
-    dropdownDivider: {
-        height: 1,
-        backgroundColor: '#E5E3DE',
-    },
-
-    dropdownText: {
-        fontSize: 16,
-        color: '#1F2937',
-    },
+    buttonText: { color: 'white', fontSize: 17, fontWeight: '700', marginLeft: 8 },
 });

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Church } from 'lucide-react-native';
+import { Church, Eye, EyeOff } from 'lucide-react-native';
 import { useState } from 'react';
 import {
   Alert,
@@ -19,6 +19,8 @@ export default function LoginScreen() {
   const [email, setEmailInput] = useState<string>("f@gmail.com");
   const [password, setPasswordInput] = useState<string>("1234");
   const [loading, setLoading] = useState<boolean>(false);
+      const [showPassword, setShowPassword] = useState<boolean>(false);
+
 const router = useRouter();
 
 const validarParametros = () => {
@@ -92,11 +94,22 @@ return ( <SafeAreaView style={styles.container}>
       <TextInput
         style={styles.input}
         value={password}
+        
         onChangeText={setPasswordInput}
         placeholder='Contraseña'
         placeholderTextColor='#999'
-        secureTextEntry
+        secureTextEntry={!showPassword}
       />
+      <TouchableOpacity
+                                style={styles.eyeButton}
+                                onPress={() => setShowPassword((prev) => !prev)}
+                            >
+                                {showPassword ? (
+                                    <EyeOff size={20} color="#6B7280" />
+                                ) : (
+                                    <Eye size={20} color="#6B7280" />
+                                )}
+                            </TouchableOpacity>
     </View>
   </View>
 
@@ -202,6 +215,7 @@ elevation: 6,
 
 
 },
+eyeButton: { paddingLeft: 10 },
 
 buttonText: {
 color: 'white',
