@@ -11,6 +11,9 @@ export const getPrestamos = async (): Promise<PrestamosApiResponse> => {
   const response = await axiosClient.get<PrestamosApiResponse>("prestamos");
   return response.data;
 };
+
+// --- Crear / Editar préstamo ---
+
 export interface CreateLoanPayload {
   id_item: number;
   id_usuario: number | null;
@@ -20,6 +23,13 @@ export interface CreateLoanPayload {
   cantidad: number;
   id_garantia: number;
   observaciones: string;
+}
+
+// Al editar, además se preserva el progreso de devolución y las fechas originales.
+export interface UpdateLoanPayload extends CreateLoanPayload {
+  cantidad_devuelta: number;
+  fecha_prestamo: string;
+  fecha_devolucion: string | null;
 }
 
 interface LoanSuccessResponse {
@@ -39,22 +49,6 @@ export type LoanMutationResponse = LoanSuccessResponse | LoanErrorResponse;
 export const isLoanSuccess = (res: LoanMutationResponse): res is LoanSuccessResponse => {
   return "status" in res && res.status === "success";
 };
-
-export interface CreateLoanPayload {
-  id_item: number;
-  id_usuario: number | null;
-  nombre_solicitante: string;
-  telefono_solicitante: string;
-  estatus: number;
-  cantidad: number;
-  id_garantia: number;
-  observaciones: string;
-}
-
-export interface UpdateLoanPayload extends CreateLoanPayload {
-  fecha_prestamo: string;
-  fecha_devolucion: string | null;
-}
 
 // Respuesta de éxito exclusiva de "crear"
 interface LoanCreateSuccessResponse {
@@ -91,13 +85,28 @@ export const updateLoan = async (
   const response = await axiosClient.put<UpdateLoanResult>(`prestamos/${id_prestamo}`, payload);
   return response.data;
 };
+
+// --- Devolución de préstamo (total o parcial) ---
+
+export interface ReturnLoanPayload {
+  // Cantidad que se devuelve EN ESTA llamada, no el total del préstamo.
+  // Puede ser menor a lo pendiente (devolución parcial) o igual (devolución total).
+  cantidad: number;
+}
+
 export interface GenericLoanResponse {
   error: boolean;
   mensaje: string;
   contenido: string | unknown[];
 }
 
-export const returnLoan = async (id_prestamo: number): Promise<GenericLoanResponse> => {
-  const response = await axiosClient.put<GenericLoanResponse>(`devolverprestamo/${id_prestamo}`);
+export const returnLoan = async (
+  id_prestamo: number,
+  payload: ReturnLoanPayload
+): Promise<GenericLoanResponse> => {
+  const response = await axiosClient.put<GenericLoanResponse>(
+    `devolverprestamo/${id_prestamo}`,
+    payload
+  );
   return response.data;
 };

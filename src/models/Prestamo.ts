@@ -14,4 +14,5 @@ export interface Prestamo {
   garantia: string;
   id_usuario: number | null;
   usuario: string | null;
+  cantidad_devuelta: number;
 }

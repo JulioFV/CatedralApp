@@ -1,7 +1,7 @@
 import { ApiError } from '@/api/axiosClient';
 import { returnLoan } from '@/api/services/loanService';
 import { Prestamo } from '@/models/Prestamo';
-import { ESTATUS_DEVUELTO, mapEstatusToLabel } from '@/utils/loanStatus';
+import { ESTATUS_DEVUELTO, ESTATUS_PARCIAL, mapEstatusToLabel } from '@/utils/loanStatus';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
     ArrowLeft,
@@ -19,6 +19,7 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
@@ -35,6 +36,15 @@ export default function LoanDetail() {
     const [loan, setLoan] = useState<Prestamo | null>(parsedLoan);
     const [submitting, setSubmitting] = useState<boolean>(false);
 
+    // Cuánto de este préstamo sigue sin devolverse.
+    const pendiente = loan ? loan.cantidad - (loan.cantidad_devuelta ?? 0) : 0;
+
+    // Cantidad que el usuario quiere devolver en esta operación (por defecto: todo lo pendiente).
+    const [cantidadDevolver, setCantidadDevolver] = useState<string>(
+        parsedLoan ? (parsedLoan.cantidad - (parsedLoan.cantidad_devuelta ?? 0)).toString() : ''
+    );
+    const [errorCantidad, setErrorCantidad] = useState<string | null>(null);
+
     const handleBack = (): void => {
         router.back();
     };
@@ -42,9 +52,27 @@ export default function LoanDetail() {
     const handleReturn = (): void => {
         if (!loan) return;
 
+        const cantidadNum = Number(cantidadDevolver);
+
+        if (!cantidadDevolver.trim() || isNaN(cantidadNum) || cantidadNum <= 0) {
+            setErrorCantidad('Ingresa una cantidad válida');
+            return;
+        }
+
+        if (cantidadNum > pendiente) {
+            setErrorCantidad(`Solo hay ${pendiente} unidad(es) pendiente(s) de devolver`);
+            return;
+        }
+
+        setErrorCantidad(null);
+
+        const esDevolucionTotal = cantidadNum === pendiente;
+
         Alert.alert(
-            '¿Registrar devolución?',
-            `Se marcará el préstamo de "${loan.item}" como devuelto.`,
+            esDevolucionTotal ? '¿Registrar devolución total?' : '¿Registrar devolución parcial?',
+            esDevolucionTotal
+                ? `Se marcará el préstamo de "${loan.item}" como devuelto por completo.`
+                : `Se registrará la devolución de ${cantidadNum} de ${pendiente} unidad(es) pendientes de "${loan.item}".`,
             [
                 { text: 'Cancelar', style: 'cancel' },
                 {
@@ -52,16 +80,28 @@ export default function LoanDetail() {
                     onPress: async () => {
                         try {
                             setSubmitting(true);
-                            const result = await returnLoan(loan.id_prestamo);
+                            // El backend ahora requiere "cantidad" en el body: es lo que se
+                            // devuelve en ESTA llamada, no necesariamente el total del préstamo.
+                            const result = await returnLoan(loan.id_prestamo, { cantidad: cantidadNum });
 
                             if (!result.error) {
                                 // El servidor no regresa el préstamo actualizado, solo un mensaje;
-                                // reflejamos el cambio localmente para no recargar toda la pantalla.
-                                setLoan({
+                                // reflejamos el cambio localmente replicando la misma lógica del backend.
+                                const nuevaCantidadDevuelta = (loan.cantidad_devuelta ?? 0) + cantidadNum;
+                                const nuevoPendiente = loan.cantidad - nuevaCantidadDevuelta;
+                                const nuevoEstatus = nuevoPendiente === 0 ? ESTATUS_DEVUELTO : ESTATUS_PARCIAL;
+
+                                const loanActualizado: Prestamo = {
                                     ...loan,
-                                    estatus: ESTATUS_DEVUELTO,
-                                    fecha_devolucion: new Date().toISOString(),
-                                });
+                                    cantidad_devuelta: nuevaCantidadDevuelta,
+                                    estatus: nuevoEstatus,
+                                    fecha_devolucion:
+                                        nuevoPendiente === 0 ? new Date().toISOString() : loan.fecha_devolucion,
+                                };
+
+                                setLoan(loanActualizado);
+                                setCantidadDevolver(nuevoPendiente.toString());
+
                                 Alert.alert('Listo', typeof result.contenido === 'string'
                                     ? result.contenido
                                     : result.mensaje);
@@ -98,11 +138,26 @@ export default function LoanDetail() {
     }
 
     const statusLabel = mapEstatusToLabel(loan.estatus);
-    const isActivo = statusLabel === 'ACTIVO';
+    const estatus = loan.estatus; // usar el valor tipado para comparaciones seguras
     const esUsuarioRegistrado = loan.id_usuario !== null;
 
-    const statusStyle = isActivo ? styles.activeBadge : styles.returnedBadge;
-    const statusTextStyle = isActivo ? styles.activeText : styles.returnedText;
+    // El préstamo admite devolución mientras no esté cerrado por completo,
+    // ya sea que esté ACTIVO (nada devuelto) o PARCIAL (algo ya devuelto).
+    const puedeDevolver = loan.estatus !== ESTATUS_DEVUELTO;
+
+    const statusStyle =
+        estatus === ESTATUS_DEVUELTO
+            ? styles.returnedBadge
+            : estatus === ESTATUS_PARCIAL
+                ? styles.partialBadge
+                : styles.activeBadge;
+
+    const statusTextStyle =
+        estatus === ESTATUS_DEVUELTO
+            ? styles.returnedText
+            : estatus === ESTATUS_PARCIAL
+                ? styles.partialText
+                : styles.activeText;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -148,8 +203,18 @@ export default function LoanDetail() {
                     </View>
 
                     <View style={styles.row}>
-                        <Text style={styles.label}>Cantidad</Text>
+                        <Text style={styles.label}>Cantidad prestada</Text>
                         <Text style={styles.value}>{loan.cantidad}</Text>
+                    </View>
+
+                    <View style={styles.row}>
+                        <Text style={styles.label}>Cantidad devuelta</Text>
+                        <Text style={styles.value}>{loan.cantidad_devuelta ?? 0}</Text>
+                    </View>
+
+                    <View style={styles.row}>
+                        <Text style={styles.label}>Pendiente</Text>
+                        <Text style={styles.value}>{pendiente}</Text>
                     </View>
 
                     <View style={styles.row}>
@@ -203,23 +268,56 @@ export default function LoanDetail() {
                     </Text>
                 </View>
 
-                {/* Botón de devolución */}
-                {isActivo && (
-                    <TouchableOpacity
-                        style={styles.returnButton}
-                        activeOpacity={0.85}
-                        onPress={handleReturn}
-                        disabled={submitting}
-                    >
-                        {submitting ? (
-                            <ActivityIndicator size="small" color="white" />
-                        ) : (
-                            <>
-                                <CircleCheck size={20} color="white" />
-                                <Text style={styles.returnButtonText}>Registrar Devolución</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
+                {/* Registrar devolución (total o parcial) */}
+                {puedeDevolver && (
+                    <View style={styles.card}>
+                        <Text style={styles.sectionTitle}>Registrar Devolución</Text>
+
+                        <View style={styles.field}>
+                            <Text style={styles.label}>CANTIDAD A DEVOLVER</Text>
+                            <View style={styles.cantidadRow}>
+                                <TextInput
+                                    style={[
+                                        styles.input,
+                                        styles.cantidadInput,
+                                        errorCantidad && styles.inputError,
+                                    ]}
+                                    keyboardType="numeric"
+                                    value={cantidadDevolver}
+                                    onChangeText={(text) => {
+                                        setCantidadDevolver(text);
+                                        setErrorCantidad(null);
+                                    }}
+                                />
+                                <TouchableOpacity
+                                    style={styles.allButton}
+                                    onPress={() => {
+                                        setCantidadDevolver(pendiente.toString());
+                                        setErrorCantidad(null);
+                                    }}
+                                >
+                                    <Text style={styles.allButtonText}>Todo ({pendiente})</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {errorCantidad ? <Text style={styles.errorHint}>{errorCantidad}</Text> : null}
+                        </View>
+
+                        <TouchableOpacity
+                            style={styles.returnButton}
+                            activeOpacity={0.85}
+                            onPress={handleReturn}
+                            disabled={submitting}
+                        >
+                            {submitting ? (
+                                <ActivityIndicator size="small" color="white" />
+                            ) : (
+                                <>
+                                    <CircleCheck size={20} color="white" />
+                                    <Text style={styles.returnButtonText}>Registrar Devolución</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </View>
                 )}
             </ScrollView>
         </SafeAreaView>
@@ -264,6 +362,8 @@ const styles = StyleSheet.create({
     statusText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
     activeBadge: { backgroundColor: '#E9E6D5', borderColor: '#C9C4B5' },
     activeText: { color: '#55624A' },
+    partialBadge: { backgroundColor: '#F5E6C8', borderColor: '#E0C68A' },
+    partialText: { color: '#8A6D1D' },
     returnedBadge: { backgroundColor: '#DCEAD7', borderColor: '#B8D2B2' },
     returnedText: { color: '#355E3B' },
     card: {
@@ -289,8 +389,31 @@ const styles = StyleSheet.create({
     infoText: { marginLeft: 10, fontSize: 15, color: '#1F2937', fontWeight: '500' },
     smallText: { fontSize: 13, color: '#6B7280', marginTop: 4 },
     paragraph: { fontSize: 15, color: '#4B5563', lineHeight: 22 },
+    field: { marginBottom: 16 },
+    cantidadRow: { flexDirection: 'row', alignItems: 'center' },
+    input: {
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#D9D7D2',
+        borderRadius: 14,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        fontSize: 16,
+        color: '#1F2937',
+    },
+    cantidadInput: { flex: 1, marginRight: 10 },
+    inputError: { borderColor: '#B91C1C' },
+    errorHint: { fontSize: 12, color: '#B91C1C', marginTop: 6 },
+    allButton: {
+        borderWidth: 1,
+        borderColor: '#7A1F1F',
+        borderRadius: 14,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+    },
+    allButtonText: { color: '#7A1F1F', fontSize: 13, fontWeight: '700' },
     returnButton: {
-        marginTop: 10,
+        marginTop: 4,
         height: 58,
         borderRadius: 16,
         backgroundColor: '#4A5D3A',

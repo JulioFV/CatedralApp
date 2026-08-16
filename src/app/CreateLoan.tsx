@@ -35,6 +35,21 @@ import {
 } from 'react-native';
 
 const ESTATUS_ACTIVO = 1;
+const ESTATUS_DEVUELTO = 2;
+const ESTATUS_PARCIAL = 3;
+
+const estatusLabel = (estatus: number): string => {
+    switch (estatus) {
+        case ESTATUS_ACTIVO:
+            return 'Activo';
+        case ESTATUS_PARCIAL:
+            return 'Devolución parcial';
+        case ESTATUS_DEVUELTO:
+            return 'Devuelto';
+        default:
+            return 'Desconocido';
+    }
+};
 
 // Código corto SOLO visual para los chips de garantía — no se envía al servidor
 const codeFromNombre = (nombre: string): string =>
@@ -132,17 +147,34 @@ export default function CreateLoan() {
 
     const handleBack = (): void => router.back();
 
+    // Cuánto de este préstamo sigue pendiente de devolución (aún descontado del stock).
+    // Con devoluciones parciales, cantidad_prestada del item ya solo refleja lo pendiente,
+    // no la cantidad original del préstamo.
+    const pendienteActual = parsedLoan
+        ? parsedLoan.cantidad - (parsedLoan.cantidad_devuelta ?? 0)
+        : 0;
+
+    // Si ya se registró alguna devolución parcial, no se debe permitir cambiar
+    // de artículo ni bajar la cantidad por debajo de lo ya devuelto.
+    const cantidadBloqueada =
+        isEditMode && !!parsedLoan && (parsedLoan.cantidad_devuelta ?? 0) > 0;
+
+    // Préstamo ya devuelto por completo: no tiene sentido seguir editándolo aquí.
+    const prestamoCerrado = isEditMode && parsedLoan?.estatus === ESTATUS_DEVUELTO;
+
     // Cuánto se puede prestar del artículo seleccionado.
     // En edición, si el préstamo es del mismo artículo, se suma de vuelta
-    // la cantidad que ya tenía este préstamo (porque ya está descontada del stock).
+    // solo lo que sigue pendiente de este préstamo (lo que realmente tiene
+    // descontado del stock hoy).
     const maxDisponible = useMemo(() => {
         if (!selectedItem) return 0;
         const yaDescontado =
-            isEditMode && parsedLoan?.id_item === selectedItem.id_item ? parsedLoan.cantidad : 0;
+            isEditMode && parsedLoan?.id_item === selectedItem.id_item ? pendienteActual : 0;
         return selectedItem.cantidad - selectedItem.cantidad_prestada + yaDescontado;
-    }, [selectedItem, isEditMode, parsedLoan]);
+    }, [selectedItem, isEditMode, parsedLoan, pendienteActual]);
 
     const handleSelectItem = (item: Item): void => {
+        if (cantidadBloqueada) return;
         setSelectedItem(item);
         setItemModalVisible(false);
         setErrors((prev) => ({ ...prev, item: '' }));
@@ -159,77 +191,6 @@ export default function CreateLoan() {
         setRegisteredUser((prev) => !prev);
         setErrors((prev) => ({ ...prev, usuario: '', borrowerName: '', phone: '' }));
     };
-    const handleRegister = async (): Promise<void> => {
-    if (!validate()) return;
-    if (!selectedItem || !selectedGarantiaId) return; // ya validado arriba
-
-    const camposComunes = {
-        id_item: selectedItem.id_item,
-        id_usuario: registeredUser && selectedUsuario ? selectedUsuario.id_usuario : null,
-        nombre_solicitante: registeredUser && selectedUsuario ? selectedUsuario.nombre : borrowerName.trim(),
-        telefono_solicitante: registeredUser ? '' : phone.trim(),
-        cantidad: Number(cantidad),
-        id_garantia: selectedGarantiaId,
-        observaciones: notes.trim(),
-    };
-
-    try {
-        setSubmitting(true);
-
-        if (isEditMode && parsedLoan) {
-            // En edición se preservan estatus, fecha_prestamo y fecha_devolucion
-            // originales; este formulario no los modifica.
-            const updatePayload: UpdateLoanPayload = {
-                ...camposComunes,
-                estatus: parsedLoan.estatus,
-                fecha_prestamo: parsedLoan.fecha_prestamo,
-                fecha_devolucion: parsedLoan.fecha_devolucion,
-            };
-
-            const result = await updateLoan(parsedLoan.id_prestamo, updatePayload);
-
-            if (!result.error) {
-                Alert.alert('Éxito', result.mensaje, [
-                    { text: 'Aceptar', onPress: () => router.back() },
-                ]);
-            } else {
-                Alert.alert('No se pudo actualizar el préstamo', result.mensaje);
-            }
-        } else {
-            const createPayload: CreateLoanPayload = {
-                ...camposComunes,
-                estatus: ESTATUS_ACTIVO,
-            };
-
-            const result = await createLoan(createPayload);
-
-            if (isCreateSuccess(result)) {
-                Alert.alert('Éxito', result.message, [
-                    { text: 'Aceptar', onPress: () => router.back() },
-                ]);
-            } else {
-                Alert.alert('No se pudo registrar el préstamo', result.mensaje);
-            }
-        }
-    } catch (error) {
-        const apiError = error as ApiError;
-        Alert.alert('Error', apiError.mensaje || 'Ocurrió un error al guardar el préstamo');
-    } finally {
-        setSubmitting(false);
-    }
-};
-
-    const garantiaOptions: LocationOption[] = garantias.map((g) => ({
-        id: g.id_garantia,
-        code: codeFromNombre(g.nombre),
-        name: g.nombre,
-    }));
-
-    const usuarioOptions: SelectOption[] = usuarios.map((u) => ({
-        id: u.id_usuario,
-        label: u.nombre,
-        sublabel: u.email,
-    }));
 
     const validate = (): boolean => {
         const newErrors: Record<string, string> = {};
@@ -247,6 +208,8 @@ export default function CreateLoan() {
         const cantidadNum = Number(cantidad);
         if (!cantidad.trim() || isNaN(cantidadNum) || cantidadNum <= 0) {
             newErrors.cantidad = 'Ingresa una cantidad válida';
+        } else if (cantidadBloqueada && cantidadNum < (parsedLoan?.cantidad_devuelta ?? 0)) {
+            newErrors.cantidad = `Ya se devolvieron ${parsedLoan?.cantidad_devuelta} unidad(es); no puedes bajar de esa cantidad`;
         } else if (selectedItem && cantidadNum > maxDisponible) {
             newErrors.cantidad = `Solo hay ${maxDisponible} unidad(es) disponible(s)`;
         }
@@ -255,6 +218,78 @@ export default function CreateLoan() {
         return Object.keys(newErrors).length === 0;
     };
 
+    const handleRegister = async (): Promise<void> => {
+        if (!validate()) return;
+        if (!selectedItem || !selectedGarantiaId) return; // ya validado arriba
+
+        const camposComunes = {
+            id_item: selectedItem.id_item,
+            id_usuario: registeredUser && selectedUsuario ? selectedUsuario.id_usuario : null,
+            nombre_solicitante: registeredUser && selectedUsuario ? selectedUsuario.nombre : borrowerName.trim(),
+            telefono_solicitante: registeredUser ? '' : phone.trim(),
+            cantidad: Number(cantidad),
+            id_garantia: selectedGarantiaId,
+            observaciones: notes.trim(),
+        };
+
+        try {
+            setSubmitting(true);
+
+            if (isEditMode && parsedLoan) {
+                // En edición se preservan estatus, cantidad_devuelta, fecha_prestamo
+                // y fecha_devolucion originales; este formulario no gestiona devoluciones.
+                const updatePayload: UpdateLoanPayload = {
+                    ...camposComunes,
+                    estatus: parsedLoan.estatus,
+                    cantidad_devuelta: parsedLoan.cantidad_devuelta ?? 0,
+                    fecha_prestamo: parsedLoan.fecha_prestamo,
+                    fecha_devolucion: parsedLoan.fecha_devolucion,
+                };
+
+                const result = await updateLoan(parsedLoan.id_prestamo, updatePayload);
+
+                if (!result.error) {
+                    Alert.alert('Éxito', result.mensaje, [
+                        { text: 'Aceptar', onPress: () => router.back() },
+                    ]);
+                } else {
+                    Alert.alert('No se pudo actualizar el préstamo', result.mensaje);
+                }
+            } else {
+                const createPayload: CreateLoanPayload = {
+                    ...camposComunes,
+                    estatus: ESTATUS_ACTIVO
+                };
+
+                const result = await createLoan(createPayload);
+
+                if (isCreateSuccess(result)) {
+                    Alert.alert('Éxito', result.message, [
+                        { text: 'Aceptar', onPress: () => router.back() },
+                    ]);
+                } else {
+                    Alert.alert('No se pudo registrar el préstamo', result.mensaje);
+                }
+            }
+        } catch (error) {
+            const apiError = error as ApiError;
+            Alert.alert('Error', apiError.mensaje || 'Ocurrió un error al guardar el préstamo');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const garantiaOptions: LocationOption[] = garantias.map((g) => ({
+        id: g.id_garantia,
+        code: codeFromNombre(g.nombre),
+        name: g.nombre,
+    }));
+
+    const usuarioOptions: SelectOption[] = usuarios.map((u) => ({
+        id: u.id_usuario,
+        label: u.nombre,
+        sublabel: u.email,
+    }));
 
     if (loadingCatalogos) {
         return (
@@ -295,129 +330,167 @@ export default function CreateLoan() {
                         <View style={styles.headerButton} />
                     </View>
 
-                    {/* Artículo */}
-                    <SelectField
-                        label="ARTÍCULO"
-                        value={selectedItem ? `${selectedItem.nombre} (${selectedItem.codigo})` : ''}
-                        placeholder="Buscar y seleccionar artículo..."
-                        onPress={() => setItemModalVisible(true)}
-                        error={errors.item}
-                    />
-                    {selectedItem && (
-                        <Text style={styles.stockHint}>
-                            Disponibles: {maxDisponible} de {selectedItem.cantidad}
-                        </Text>
-                    )}
-
-                    {/* Checkbox usuario registrado */}
-                    <TouchableOpacity
-                        style={styles.checkboxCard}
-                        activeOpacity={0.8}
-                        onPress={handleToggleRegisteredUser}
-                    >
-                        <View style={[styles.checkbox, registeredUser && styles.checkboxChecked]}>
-                            {registeredUser && <Check size={16} color="white" />}
+                    {prestamoCerrado ? (
+                        <View style={styles.centerMessage}>
+                            <Text style={styles.errorText}>
+                                Este préstamo ya fue devuelto por completo y no se puede editar.
+                            </Text>
+                            <TouchableOpacity onPress={handleBack} style={{ marginTop: 16 }}>
+                                <Text style={styles.linkText}>Volver</Text>
+                            </TouchableOpacity>
                         </View>
-                        <Text style={styles.checkboxText}>¿El solicitante es un usuario registrado?</Text>
-                    </TouchableOpacity>
-
-                    {/* Cambio dinámico: usuario registrado vs. datos manuales */}
-                    {registeredUser ? (
-                        <SelectField
-                            label="USUARIO SOLICITANTE"
-                            value={selectedUsuario?.nombre ?? ''}
-                            placeholder="Selecciona un usuario"
-                            onPress={() => setUserModalVisible(true)}
-                            error={errors.usuario}
-                        />
                     ) : (
-                        <View style={styles.groupCard}>
-                            <View style={styles.field}>
-                                <Text style={styles.label}>NOMBRE DEL SOLICITANTE</Text>
-                                <TextInput
-                                    style={[styles.input, errors.borrowerName && styles.inputError]}
-                                    placeholder="Ej: María López"
-                                    placeholderTextColor="#A1A1AA"
-                                    value={borrowerName}
-                                    onChangeText={setBorrowerName}
-                                />
-                                {errors.borrowerName ? (
-                                    <Text style={styles.errorHint}>{errors.borrowerName}</Text>
-                                ) : null}
-                            </View>
+                        <>
+                            {isEditMode && parsedLoan && (
+                                <View style={styles.statusBadge}>
+                                    <Text style={styles.statusBadgeText}>
+                                        {estatusLabel(parsedLoan.estatus)}
+                                        {(parsedLoan.cantidad_devuelta ?? 0) > 0 &&
+                                            ` · ${parsedLoan.cantidad_devuelta}/${parsedLoan.cantidad} devuelto(s)`}
+                                    </Text>
+                                </View>
+                            )}
 
-                            <View style={[styles.field, { marginBottom: 0 }]}>
-                                <Text style={styles.label}>TELÉFONO</Text>
-                                <TextInput
-                                    style={[styles.input, errors.phone && styles.inputError]}
-                                    placeholder="123-456-7890"
-                                    placeholderTextColor="#A1A1AA"
-                                    keyboardType="phone-pad"
-                                    value={phone}
-                                    onChangeText={setPhone}
-                                />
-                                {errors.phone ? <Text style={styles.errorHint}>{errors.phone}</Text> : null}
-                            </View>
-                        </View>
-                    )}
-
-                    {/* Garantía */}
-                    <Text style={styles.label}>TIPO DE GARANTÍA</Text>
-                    <LocationFilterBar
-                        locations={garantiaOptions}
-                        selectedId={selectedGarantiaId ?? -1}
-                        onSelect={(id) => {
-                            setSelectedGarantiaId(id);
-                            setErrors((prev) => ({ ...prev, garantia: '' }));
-                        }}
-                    />
-                    {errors.garantia ? <Text style={styles.errorHint}>{errors.garantia}</Text> : null}
-
-                    {/* Cantidad */}
-                    <View style={styles.field}>
-                        <Text style={styles.label}>CANTIDAD</Text>
-                        <TextInput
-                            style={[styles.input, errors.cantidad && styles.inputError]}
-                            keyboardType="numeric"
-                            value={cantidad}
-                            onChangeText={setCantidad}
-                        />
-                        {errors.cantidad ? <Text style={styles.errorHint}>{errors.cantidad}</Text> : null}
-                    </View>
-
-                    {/* Observaciones */}
-                    <View style={styles.field}>
-                        <Text style={styles.label}>OBSERVACIONES</Text>
-                        <TextInput
-                            style={[styles.input, styles.textArea]}
-                            placeholder="Condiciones del préstamo..."
-                            placeholderTextColor="#A1A1AA"
-                            multiline
-                            numberOfLines={5}
-                            textAlignVertical="top"
-                            value={notes}
-                            onChangeText={setNotes}
-                        />
-                    </View>
-
-                    {/* Botón */}
-                    <TouchableOpacity
-                        style={styles.button}
-                        activeOpacity={0.85}
-                        onPress={handleRegister}
-                        disabled={submitting}
-                    >
-                        {submitting ? (
-                            <ActivityIndicator size="small" color="white" />
-                        ) : (
-                            <>
-                                <Check size={20} color="white" />
-                                <Text style={styles.buttonText}>
-                                    {isEditMode ? 'Guardar Cambios' : 'Registrar Préstamo'}
+                            {/* Artículo */}
+                            <SelectField
+                                label="ARTÍCULO"
+                                value={selectedItem ? `${selectedItem.nombre} (${selectedItem.codigo})` : ''}
+                                placeholder="Buscar y seleccionar artículo..."
+                                onPress={() => !cantidadBloqueada && setItemModalVisible(true)}
+                                error={errors.item}
+                            />
+                            {selectedItem && (
+                                <Text style={styles.stockHint}>
+                                    Disponibles: {maxDisponible} de {selectedItem.cantidad}
                                 </Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
+                            )}
+                            {cantidadBloqueada && (
+                                <Text style={styles.lockHint}>
+                                    No puedes cambiar el artículo: este préstamo ya tiene devoluciones registradas.
+                                </Text>
+                            )}
+
+                            {/* Checkbox usuario registrado */}
+                            <TouchableOpacity
+                                style={styles.checkboxCard}
+                                activeOpacity={0.8}
+                                onPress={handleToggleRegisteredUser}
+                            >
+                                <View style={[styles.checkbox, registeredUser && styles.checkboxChecked]}>
+                                    {registeredUser && <Check size={16} color="white" />}
+                                </View>
+                                <Text style={styles.checkboxText}>¿El solicitante es un usuario registrado?</Text>
+                            </TouchableOpacity>
+
+                            {/* Cambio dinámico: usuario registrado vs. datos manuales */}
+                            {registeredUser ? (
+                                <SelectField
+                                    label="USUARIO SOLICITANTE"
+                                    value={selectedUsuario?.nombre ?? ''}
+                                    placeholder="Selecciona un usuario"
+                                    onPress={() => setUserModalVisible(true)}
+                                    error={errors.usuario}
+                                />
+                            ) : (
+                                <View style={styles.groupCard}>
+                                    <View style={styles.field}>
+                                        <Text style={styles.label}>NOMBRE DEL SOLICITANTE</Text>
+                                        <TextInput
+                                            style={[styles.input, errors.borrowerName && styles.inputError]}
+                                            placeholder="Ej: María López"
+                                            placeholderTextColor="#A1A1AA"
+                                            value={borrowerName}
+                                            onChangeText={setBorrowerName}
+                                        />
+                                        {errors.borrowerName ? (
+                                            <Text style={styles.errorHint}>{errors.borrowerName}</Text>
+                                        ) : null}
+                                    </View>
+
+                                    <View style={[styles.field, { marginBottom: 0 }]}>
+                                        <Text style={styles.label}>TELÉFONO</Text>
+                                        <TextInput
+                                            style={[styles.input, errors.phone && styles.inputError]}
+                                            placeholder="123-456-7890"
+                                            placeholderTextColor="#A1A1AA"
+                                            keyboardType="phone-pad"
+                                            value={phone}
+                                            onChangeText={setPhone}
+                                        />
+                                        {errors.phone ? <Text style={styles.errorHint}>{errors.phone}</Text> : null}
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* Garantía */}
+                            <Text style={styles.label}>TIPO DE GARANTÍA</Text>
+                            <LocationFilterBar
+                                locations={garantiaOptions}
+                                selectedId={selectedGarantiaId ?? -1}
+                                onSelect={(id) => {
+                                    setSelectedGarantiaId(id);
+                                    setErrors((prev) => ({ ...prev, garantia: '' }));
+                                }}
+                            />
+                            {errors.garantia ? <Text style={styles.errorHint}>{errors.garantia}</Text> : null}
+
+                            {/* Cantidad */}
+                            <View style={styles.field}>
+                                <Text style={styles.label}>CANTIDAD</Text>
+                                <TextInput
+                                    style={[
+                                        styles.input,
+                                        errors.cantidad && styles.inputError,
+                                        cantidadBloqueada && styles.inputDisabled,
+                                    ]}
+                                    keyboardType="numeric"
+                                    value={cantidad}
+                                    onChangeText={setCantidad}
+                                    editable={!cantidadBloqueada}
+                                />
+                                {errors.cantidad ? <Text style={styles.errorHint}>{errors.cantidad}</Text> : null}
+                                {cantidadBloqueada && !errors.cantidad && (
+                                    <Text style={styles.lockHint}>
+                                        No puedes bajar de {parsedLoan?.cantidad_devuelta} unidad(es): ya fueron devueltas.
+                                    </Text>
+                                )}
+                            </View>
+
+                            {/* Observaciones */}
+                            <View style={styles.field}>
+                                <Text style={styles.label}>OBSERVACIONES</Text>
+                                <TextInput
+                                    style={[styles.input, styles.textArea]}
+                                    placeholder="Condiciones del préstamo..."
+                                    placeholderTextColor="#A1A1AA"
+                                    multiline
+                                    numberOfLines={5}
+                                    textAlignVertical="top"
+                                    value={notes}
+                                    onChangeText={setNotes}
+                                />
+                            </View>
+
+                            {/* Botón */}
+                            <TouchableOpacity
+                                style={styles.button}
+                                activeOpacity={0.85}
+                                onPress={handleRegister}
+                                disabled={submitting}
+                            >
+                                {submitting ? (
+                                    <ActivityIndicator size="small" color="white" />
+                                ) : (
+                                    <>
+                                        <Check size={20} color="white" />
+                                        <Text style={styles.buttonText}>
+                                            {isEditMode ? 'Guardar Cambios' : 'Registrar Préstamo'}
+                                        </Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </>
+                    )}
                 </ScrollView>
             </KeyboardAvoidingView>
 
@@ -466,8 +539,10 @@ const styles = StyleSheet.create({
         color: '#1F2937',
     },
     inputError: { borderColor: '#B91C1C' },
+    inputDisabled: { backgroundColor: '#EEEDE9', color: '#9CA3AF' },
     errorHint: { fontSize: 12, color: '#B91C1C', marginTop: -14, marginBottom: 16 },
     stockHint: { fontSize: 12, color: '#6B7280', marginTop: -14, marginBottom: 16 },
+    lockHint: { fontSize: 12, color: '#9A6B00', marginTop: -14, marginBottom: 16 },
     textArea: { minHeight: 120 },
     checkboxCard: {
         flexDirection: 'row',
@@ -517,4 +592,14 @@ const styles = StyleSheet.create({
     buttonText: { color: 'white', fontSize: 17, fontWeight: '700', marginLeft: 8 },
     centerMessage: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
     errorText: { color: '#B91C1C', fontSize: 15, textAlign: 'center' },
+    linkText: { color: '#7A1F1F', fontWeight: '700' },
+    statusBadge: {
+        alignSelf: 'flex-start',
+        backgroundColor: '#F3E8E8',
+        borderRadius: 999,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        marginBottom: 18,
+    },
+    statusBadgeText: { color: '#7A1F1F', fontSize: 12, fontWeight: '700' },
 });
