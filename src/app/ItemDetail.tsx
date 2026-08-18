@@ -1,5 +1,6 @@
 import { ApiError } from '@/api/axiosClient';
 import { updateItemStatus } from '@/api/services/itemService';
+import { CustomAlert as Alert } from '@/components/CustomAlert';
 import { Item } from '@/models/Item';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -11,7 +12,6 @@ import {
 import { useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     SafeAreaView,
     ScrollView,
     StyleSheet,

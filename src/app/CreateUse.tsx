@@ -1,12 +1,12 @@
 import { ApiError } from '@/api/axiosClient';
 import { createUso, updateUso, UsoPayload } from '@/api/services/usoService';
+import { CustomAlert as Alert } from '@/components/CustomAlert';
 import { Uso } from '@/models/Uso';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Check } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     KeyboardAvoidingView,
     Platform,
     SafeAreaView,

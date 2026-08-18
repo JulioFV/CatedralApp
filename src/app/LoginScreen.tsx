@@ -1,9 +1,9 @@
+import { CustomAlert as Alert } from '@/components/CustomAlert';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Church, Eye, EyeOff } from 'lucide-react-native';
 import { useState } from 'react';
 import {
-  Alert,
   SafeAreaView,
   StyleSheet,
   Text,

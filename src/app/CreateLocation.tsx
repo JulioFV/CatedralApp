@@ -1,12 +1,12 @@
 import { ApiError } from '@/api/axiosClient';
 import { AreaPayload, createArea, updateArea } from '@/api/services/areaService';
+import { CustomAlert as Alert } from '@/components/CustomAlert';
 import { Lugar } from '@/models/Lugar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Check } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     KeyboardAvoidingView,
     Platform,
     SafeAreaView,

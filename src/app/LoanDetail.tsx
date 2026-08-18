@@ -1,5 +1,6 @@
 import { ApiError } from '@/api/axiosClient';
 import { returnLoan } from '@/api/services/loanService';
+import { CustomAlert as Alert } from '@/components/CustomAlert';
 import { Prestamo } from '@/models/Prestamo';
 import { ESTATUS_DEVUELTO, ESTATUS_PARCIAL, mapEstatusToLabel } from '@/utils/loanStatus';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -14,7 +15,6 @@ import {
 import { useMemo, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     SafeAreaView,
     ScrollView,
     StyleSheet,

@@ -1,6 +1,7 @@
 import { ApiError } from '@/api/axiosClient';
 import { getRoles } from '@/api/services/rolService';
 import { createUser, updateUser, UserPayload } from '@/api/services/userService';
+import { CustomAlert as Alert } from '@/components/CustomAlert';
 import LocationFilterBar, { LocationOption } from '@/components/LocationFilterBar';
 import { Rol } from '@/models/Rol';
 import { Usuario } from '@/models/Usuario';
@@ -9,7 +10,6 @@ import { ArrowLeft, Check, Eye, EyeOff } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     KeyboardAvoidingView,
     Platform,
     SafeAreaView,

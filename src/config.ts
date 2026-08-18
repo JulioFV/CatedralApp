@@ -6,4 +6,4 @@ const HOST = Platform.select({
   default: "192.168.100.7",
 });
 
-export const UrlBase = `https://40ef-38-137-252-200.ngrok-free.app/ApiCatedral/public/`;
+export const UrlBase = `http://localhost/ApiCatedral/public/`;

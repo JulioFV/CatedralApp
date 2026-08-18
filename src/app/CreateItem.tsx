@@ -4,6 +4,7 @@ import { getEstados } from '@/api/services/estadoService';
 import { createItem, CreateItemPayload, updateItem } from '@/api/services/itemService';
 import { getMateriales } from '@/api/services/materialService';
 import { getUsos } from '@/api/services/usoService';
+import { CustomAlert as Alert } from '@/components/CustomAlert';
 import { Estado } from '@/models/Estado';
 import { Item } from '@/models/Item';
 import { Lugar } from '@/models/Lugar';
@@ -14,7 +15,6 @@ import { ArrowLeft, Check } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     KeyboardAvoidingView,
     Platform,
     SafeAreaView,

@@ -9,6 +9,7 @@ import {
     UpdateLoanPayload,
 } from '@/api/services/loanService';
 import { getUsers } from '@/api/services/userService';
+import { CustomAlert as Alert } from '@/components/CustomAlert';
 import ItemSelectModal from '@/components/ItemSelectModal';
 import LocationFilterBar, { LocationOption } from '@/components/LocationFilterBar';
 import SelectField from '@/components/SelectField';
@@ -22,7 +23,6 @@ import { ArrowLeft, Check } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     KeyboardAvoidingView,
     Platform,
     SafeAreaView,
