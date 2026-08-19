@@ -6,4 +6,4 @@ const HOST = Platform.select({
   default: "192.168.100.7",
 });
 
-export const UrlBase = `http://localhost/ApiCatedral/public/`;
+export const UrlBase = `http://192.168.100.7/ApiCatedral/public/`;
