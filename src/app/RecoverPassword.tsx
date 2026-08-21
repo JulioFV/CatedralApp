@@ -1,6 +1,5 @@
 import { ApiError } from '@/api/axiosClient';
 import {
-    extractEmailLookupError,
     getIdByEmail,
     getPreguntaUsuario,
     updatePassword,
@@ -68,7 +67,7 @@ export default function RecoverPassword() {
 
             const idRes = await getIdByEmail(email.trim());
             if (!idRes.success || !idRes.data) {
-                setEmailError(extractEmailLookupError(idRes));
+                setEmailError(idRes.message ?? 'No se pudo verificar el correo ingresado');
                 return;
             }
 
@@ -123,7 +122,7 @@ export default function RecoverPassword() {
                 respuesta: respuesta.trim(),
             });
 
-            if (!result.error) {
+            if (!result.error && result.contenido === true) {
                 setStep('newPassword');
             } else {
                 setRespuestaError(result.mensaje);
