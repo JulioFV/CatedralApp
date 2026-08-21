@@ -4,6 +4,7 @@ import { getEstados } from '@/api/services/estadoService';
 import { createItem, CreateItemPayload, updateItem } from '@/api/services/itemService';
 import { getMateriales } from '@/api/services/materialService';
 import { getUsos } from '@/api/services/usoService';
+import CsvImportModal from '@/components/CsvImportModal';
 import { CustomAlert as Alert } from '@/components/CustomAlert';
 import { Estado } from '@/models/Estado';
 import { Item } from '@/models/Item';
@@ -11,7 +12,7 @@ import { Lugar } from '@/models/Lugar';
 import { Material } from '@/models/Material';
 import { Uso } from '@/models/Uso';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, Check } from 'lucide-react-native';
+import { ArrowLeft, Check, FileUp } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -62,6 +63,7 @@ export default function CreateItem() {
 
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState<boolean>(false);
+    const [csvModalVisible, setCsvModalVisible] = useState<boolean>(false);
 
     // 1) Cargar los 4 catálogos en paralelo
     useEffect(() => {
@@ -253,7 +255,19 @@ export default function CreateItem() {
                         <Text style={styles.title}>{isEditMode ? 'Editar Artículo' : 'Nuevo Artículo'}</Text>
                         <View style={styles.headerButton} />
                     </View>
-
+                    {Platform.OS === 'web' && !isEditMode && (
+                        <TouchableOpacity
+                            style={styles.csvBanner}
+                            activeOpacity={0.85}
+                            onPress={() => setCsvModalVisible(true)}
+                        >
+                            <FileUp size={20} color="#7A1F1F" />
+                            <View style={styles.csvBannerTextContainer}>
+                                <Text style={styles.csvBannerTitle}>¿Vas a registrar varios artículos?</Text>
+                                <Text style={styles.csvBannerSubtitle}>Impórtalos de una vez desde un archivo CSV</Text>
+                            </View>
+                        </TouchableOpacity>
+                    )}
                     {/* Ubicación primero: de aquí se deriva el código de área */}
                     <OptionGridSelector
                         label="LUGAR (UBICACIÓN)"
@@ -392,6 +406,15 @@ export default function CreateItem() {
                     </TouchableOpacity>
                 </ScrollView>
             </KeyboardAvoidingView>
+            <CsvImportModal
+                visible={csvModalVisible}
+                onClose={() => setCsvModalVisible(false)}
+                onImported={() => {
+                    // El usuario cierra el modal cuando esté listo (ya vio el resumen);
+                    // aquí solo reaccionamos si hubo inserciones exitosas.
+                    router.back();
+                }}
+            />
         </SafeAreaView>
     );
 }
@@ -443,4 +466,17 @@ const styles = StyleSheet.create({
     buttonText: { color: 'white', fontSize: 17, fontWeight: '700', marginLeft: 8 },
     centerMessage: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
     errorText: { color: '#B91C1C', fontSize: 15, textAlign: 'center' },
+    csvBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F1E9D2',
+        borderWidth: 1,
+        borderColor: '#C9A44C',
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 22,
+    },
+    csvBannerTextContainer: { marginLeft: 12, flex: 1 },
+    csvBannerTitle: { fontSize: 14, fontWeight: '700', color: '#7A1F1F' },
+    csvBannerSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
 });

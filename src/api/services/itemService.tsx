@@ -57,3 +57,37 @@ export const updateItem = async (
   const response = await axiosClient.put<ItemMutationResponse>(`item/${id_item}`, payload);
   return response.data;
 };
+export interface CsvRowError {
+  fila: number;
+  error: string;
+}
+
+export interface CsvImportResult {
+  insertados: number;
+  errores: CsvRowError[];
+}
+
+export interface CsvImportResponse {
+  error: boolean;
+  mensaje: string;
+  contenido: CsvImportResult;
+}
+
+export const importItemsCsv = async (
+  fileUri: string,
+  fileName: string
+): Promise<CsvImportResponse> => {
+  const fileResponse = await fetch(fileUri);
+  const blob = await fileResponse.blob();
+
+  const formData = new FormData();
+  formData.append('archivo', blob, fileName);
+
+  // No se fija "Content-Type" manualmente: Axios detecta el FormData y deja
+  // que el navegador establezca multipart/form-data con el boundary correcto.
+  const response = await axiosClient.post<CsvImportResponse>('itemcsv', formData, {
+    timeout: 30000,
+  });
+  return response.data;
+};
+

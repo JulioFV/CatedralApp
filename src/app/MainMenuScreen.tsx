@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Archive, Calendar, LogOut, MapPin, Package, Users } from 'lucide-react-native';
+import { Archive, Calendar, LogOut, MapPin, Package, User, Users } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { ApiError } from '../api/axiosClient';
@@ -52,6 +52,15 @@ const sections = [
         desc: 'Categorias de uso',
         color: '#6B1F1F',
         screen: '/UsesScreen',
+        roles: null,
+    },
+    {
+        id: 'Profile',
+        title: 'Perfil de Usuario',
+        icon: User,
+        desc: 'Detalles generales del usuario',
+        color: '#C9A44C',
+        screen: '/ProfileScreen',
         roles: null,
     },
     {
