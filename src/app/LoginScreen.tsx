@@ -67,8 +67,14 @@ export default function LoginScreen() {
   };
 
   return (<SafeAreaView style={styles.container}>
-    <View style={styles.logoCard}> <Church size={40} color='#7A1F1F' /> </View>
-
+    
+    <TouchableOpacity
+      onLongPress={() =>router.push('/ServerSettings')}
+      delayLongPress={1000}
+      activeOpacity={1}
+    >
+      <View style={styles.logoCard}> <Church size={40} color='#7A1F1F' /> </View>
+    </TouchableOpacity>
     <Text style={styles.title}>Catedral</Text>
     <Text style={styles.subtitle}>SISTEMA DE INVENTARIO</Text>
 
@@ -114,9 +120,9 @@ export default function LoginScreen() {
       </View>
     </View>
     <TouchableOpacity onPress={() => router.push('/RecoverPassword')}>
-    <Text style={{ color: '#7A1F1F', fontWeight: '600', textAlign: 'right', marginBottom: 16 }}>
+      <Text style={{ color: '#7A1F1F', fontWeight: '600', textAlign: 'right', marginBottom: 16 }}>
         ¿Olvidaste tu contraseña?
-    </Text>
+      </Text>
     </TouchableOpacity>
 
     <TouchableOpacity style={styles.button} onPress={validarParametros}>

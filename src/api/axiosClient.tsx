@@ -1,8 +1,8 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
-import { UrlBase } from "../config";
+import { DEFAULT_URL_BASE } from "../config";
 
 const axiosClient = axios.create({
-  baseURL: UrlBase,
+  baseURL: DEFAULT_URL_BASE,
   timeout: 10000,
   headers: {
     Accept: "application/json",
@@ -21,6 +21,23 @@ axiosClient.interceptors.request.use(
 export interface ApiError extends AxiosError {
   mensaje: string;
 }
+export const setAxiosBaseUrl = (url: string): void => {
+  axiosClient.defaults.baseURL = url;
+};
+
+export const getAxiosBaseUrl = (): string => {
+  return axiosClient.defaults.baseURL ?? DEFAULT_URL_BASE;
+};
+
+axiosClient.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    if (config.baseURL?.includes("ngrok")) {
+      config.headers.set("ngrok-skip-browser-warning", "true");
+    }
+    return config;
+  },
+  (error: AxiosError) => Promise.reject(error)
+);
 
 axiosClient.interceptors.response.use(
   (response) => response,
